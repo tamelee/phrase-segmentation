@@ -13,11 +13,16 @@ startid/endid point to *written* notes. Since the same written note can be sung
 several times (repeats), phrases are mapped greedily, in phrase order, onto the
 unfolded sequence.
 
-Unfolding strategies (tried in this order by `parse_mei`):
+Unfolding strategies (all are tried by `parse_mei`; the winner is the one that maps all the
+annotated phrases and, among those, covers the most notes; ties go to the first one):
   - "minimal": each repeated block is played once per <ending> it has
                (1st ending, 2nd ending, ...); without endings it is played twice.
                This matches the annotations (e.g. PT-1998-PT-DM-011).
-  - "written": written order, no repeats (fallback).
+  - "written": written order, no repeats. Matches songs whose whole-song repeat is
+               annotated only once (e.g. PT-1998-XX-DM-009).
+
+Phrases are mapped in document order (or by @n when all @n are integers). Sub-numbered phrases
+("1.1", "4.1") are variants of a phrase; if the mapping fails with them, it is retried without them.
 """
 from __future__ import annotations
 
@@ -358,6 +363,8 @@ def _read_phrases(score):
             phrases.append(dict(n=ph.get("n"), type=ph.get("type"), startid=s, endid=e))
     if phrases and all(p["n"] and p["n"].isdigit() for p in phrases):
         phrases.sort(key=lambda p: int(p["n"]))
+    # otherwise keep document order: sub-numbered phrases ("1.1", "4.1") are variants of a phrase
+    # (another stanza / version), listed after the main phrases, not sung right after them
     return phrases
 
 
@@ -440,7 +447,7 @@ def parse_mei(path, strategies=("minimal", "written"), require_phrases=True) -> 
     if require_phrases and not phrases:
         raise ValueError("no phrase annotations (<phrase startid endid>)")
 
-    warnings = []
+    warnings, best = [], None
     for strategy in strategies:
         state = _initial_state(score)
         items = []
@@ -452,16 +459,35 @@ def parse_mei(path, strategies=("minimal", "written"), require_phrases=True) -> 
             notes, labels, spans = _to_notes(events, [])
             return Song(song_id, path, title, strategy, notes, labels, spans, warnings)
         spans, err = _map_phrases(events, phrases)
+        dropped = False
         if spans is None:
             warnings.append(f"[{strategy}] {err}")
-            continue
+            main = [p for p in phrases if not (p["n"] and "." in p["n"])]
+            if not main or len(main) == len(phrases):
+                continue
+            # retry without the variant phrases ("x.y")
+            spans, err = _map_phrases(events, main)
+            if spans is None:
+                warnings.append(f"[{strategy}] without variants: {err}")
+                continue
+            dropped = True
         notes, labels, note_spans = _to_notes(events, spans)
         covered = sum(sp["end"] - sp["start"] + 1 for sp in note_spans)
-        if covered < 0.8 * len(notes):
-            warnings.append(f"[{strategy}] phrases only cover {covered}/{len(notes)} notes")
-        return Song(song_id, path, title, strategy, notes, labels, note_spans, warnings)
+        # rank: mapping all annotated phrases first, then the fraction of notes covered by phrases
+        coverage = (not dropped, covered / max(len(notes), 1))
+        if best is None or coverage > best[0]:
+            msg = [f"[{strategy}] variant phrases (x.y) ignored"] if dropped else []
+            best = (coverage, Song(song_id, path, title, strategy, notes, labels, note_spans, msg))
+        if coverage == (True, 1):
+            break
 
-    raise ValueError("could not map the phrases: " + " | ".join(warnings))
+    if best is None:
+        raise ValueError("could not map the phrases: " + " | ".join(warnings))
+    song = best[1]
+    covered = sum(sp["end"] - sp["start"] + 1 for sp in song.phrases)
+    if covered < 0.8 * len(song.notes):
+        song.warnings.append(f"[{song.strategy}] phrases only cover {covered}/{len(song.notes)} notes")
+    return song
 
 
 def find_mei_files(inputs):
