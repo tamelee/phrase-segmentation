@@ -1,6 +1,9 @@
 A PyTorch implementation of the BI-LSTM-CRF model.
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/P5P6XKY6B)
+# Adaptation: phrase segmentation of folk songs in MEI
+
+This fork adapts the model to symbolic music (MEI files with annotated phrases, e.g. EA-Digifolk),
+following the formulation of TransPhrase (Guan et al., 2025, *Entropy* 27:460): every note is tagged
 
 # Features:
 - Compared with [PyTorch BI-LSTM-CRF tutorial][1], following improvements are performed:
