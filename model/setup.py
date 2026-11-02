@@ -19,28 +19,3 @@ def find_version(filepath):
 
 VERSION = find_version(join('bi_lstm_crf', '__init__.py'))
 long_description = read_file_content('README.md')
-
-setup(name='bi-lstm-crf',
-      version=VERSION,
-      url='https://github.com/jidasheng/bi-lstm-crf',
-      author='Dasheng Ji',
-      author_email='jidasheng@qq.com',
-      description='A PyTorch implementation of the BI-LSTM-CRF model',
-      long_description=long_description,
-      long_description_content_type='text/markdown',
-      license='MIT',
-
-      packages=find_packages(),
-      include_package_data=True,
-      install_requires=[
-          "tqdm",
-          "numpy",
-          "pandas",
-          "torch"
-      ],
-      classifiers=[
-          "Programming Language :: Python :: 3",
-          "License :: OSI Approved :: MIT License",
-          "Operating System :: OS Independent",
-      ],
-      )

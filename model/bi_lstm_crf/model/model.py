@@ -21,27 +21,27 @@ class BiRnnCrf(nn.Module):
         self.tagset_size = tagset_size
 
         # ADAPTED: one embedding per note feature (was a single nn.Embedding)
-        self.embeddings = nn.ModuleList([nn.Embedding(size, embedding_dim) for size in vocab_sizes])
+        self.embeddings = nn.ModuleList([nn.Embedding(vocab_size, embedding_dim) for vocab_size in vocab_sizes])
         RNN = nn.LSTM if rnn == "lstm" else nn.GRU
         self.rnn = RNN(embedding_dim * len(vocab_sizes), hidden_dim // 2, num_layers=num_rnn_layers,
                        bidirectional=True, batch_first=True)
         self.crf = CRF(hidden_dim, self.tagset_size)
 
     def __build_features(self, sentences):
-        # ADAPTED: sentences is [B, L, F]. Feature 0 (pitch) is never 0 for a real note, so it
-        # defines the padding mask.
+        # ADAPTED: sentences is [B, L, F] 
+        # Feature 0 (pitch) is never 0 for a real note, so 0 (zero) defines the padding mask
         masks = sentences[:, :, 0].gt(0)
         sentences = sentences.long()
-        embeds = torch.cat([emb(sentences[:, :, i]) for i, emb in enumerate(self.embeddings)], dim=-1)
+        embeds = torch.cat([embedding(sentences[:, :, i]) for i, embedding in enumerate(self.embeddings)], dim=-1)
 
         seq_length = masks.sum(1)
         sorted_seq_length, perm_idx = seq_length.sort(descending=True)
         embeds = embeds[perm_idx, :]
 
         # FIX: recent PyTorch versions require `lengths` on the CPU (fails on GPU otherwise)
-        pack_sequence = pack_padded_sequence(embeds, lengths=sorted_seq_length.cpu(), batch_first=True)
+        pack_sequence = pack_padded_sequence(embeds, lengths=sorted_seq_length.cpu().long(), batch_first=True)
         packed_output, _ = self.rnn(pack_sequence)
-        lstm_out, _ = pad_packed_sequence(packed_output, batch_first=True)
+        lstm_out, _ = pad_packed_sequence(packed_output, batch_first=True, total_length=sentences.size(1))
         _, unperm_idx = perm_idx.sort()
         lstm_out = lstm_out[unperm_idx, :]
 
