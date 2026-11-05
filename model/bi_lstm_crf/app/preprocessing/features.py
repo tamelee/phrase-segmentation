@@ -6,12 +6,13 @@ of the original text corpus). Inspired by the TransPhrase 5-dim note vector
 {bar, position, pitch, duration, time signature}, plus a few features that help with
 phrase boundaries.
 
-IMPORTANT: "pitch" must stay the FIRST feature — the model uses feature 0 to build the
+IMPORTANT: "pitch" must stay the FIRST feature - the model uses feature 0 to build the
 padding mask (a real note never has index 0).
 """
 import math
 
-FEATURES = ["pitch", "interval", "dur", "dur_ratio", "pos", "meter", "rest_after", "fermata"]
+# "fermata" was removed: the compiled EA-Digifolk dataset has no fermata information (it would always be "0")
+FEATURES = ["pitch", "interval", "dur", "dur_ratio", "pos", "meter", "rest_after"]
 
 # tags: "E" = last note of a phrase (y = 1 in the paper), "O" = any other note (y = 0)
 TAG_OTHER = "O"
@@ -22,7 +23,6 @@ TAGS = [TAG_OTHER, TAG_END]
 FIXED_VOCABS = {
     "pitch": [str(m) for m in range(128)],                          # MIDI pitch
     "interval": ["START"] + [str(i) for i in range(-24, 25)],       # semitones, clipped to ±2 octaves
-    "fermata": ["0", "1"],
 }
 
 
@@ -32,7 +32,7 @@ def _q(x):
 
 
 def note_features(notes):
-    """notes (dicts from mei_parser) -> [[feature values in FEATURES order], ...]"""
+    """notes (dicts from eadigifolk.row_to_song) -> [[feature values in FEATURES order], ...]"""
     out = []
     prev_midi, prev_dur = None, None
     for n in notes:
@@ -50,7 +50,6 @@ def note_features(notes):
             "pos": _q(n["offset"]),                    # position within the bar
             "meter": n["meter"],                       # time signature
             "rest_after": _q(n.get("rest_after", 0)),  # rest following the note (rests are not tokens)
-            "fermata": str(int(bool(n.get("fermata")))),
         }
         out.append([values[f] for f in FEATURES])
         prev_midi, prev_dur = midi, dur
